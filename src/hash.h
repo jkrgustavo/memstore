@@ -17,22 +17,51 @@ typedef struct {
 
 HashMap *hash_create(int size);
 
-/* Allocates new memory to store val */
+/**
+ * Allocates new memory to store the value
+ * @param key The key (string) to get hashed into an index
+ * @param val A string to be associated with the provided key
+ */
 void hash_insert(const char *key, const char *val);
 
-/* Fills buffer w/ retrieved item, Buffer can be NULL */
+/**
+ * Fills provied buffer with whatever value is associated with the key. If the
+ * buffer is NULL, then the function will just check if the provided key has
+ * been inserted
+ * @param key The key (string) to get hashed into an index
+ * @param val NULLABLE the buffer to be filled with the associated value
+ * @return status of retrieval. -1 is an error, 0 is success
+ */
 int hash_retrieve(const char *key, char *buffer);   
 
-/* Same as retrieve, but deletes item */
+/**
+ * Indexes hashmap with the provided key. If found and the buffer is not NULL,
+ * the buffer is filled with the value and the item is removed from the map
+ * @param key The key (string) to get hashed into an index
+ * @param buffer NULLABLE the buffer to get filled with the associated value
+ * @return status of deletion. -1 is an error, 0 is success
+ */
 int hash_delete(const char *key, char *buffer);
 
-/* Destroyes table, frees all associated memory */
+/**
+ * Destroys the hashtable, frees all memory managed by the table 
+ */
 void hash_destroy();
 
-/* Returns the status of index */
+/**
+ * Checks the given index for its status:
+ *  2: deleted
+ *  0: empty
+ *  1: filled
+ *  @param index Index of the hashtable to be checked
+ *  @return status of the hashtable
+ */
 int hash_status(int index);
 
-/* Returns current table size */
+/**
+ * Returns the current size of the hashtable
+ * @return size of the current hashtable
+ */
 int hash_size();
 
 

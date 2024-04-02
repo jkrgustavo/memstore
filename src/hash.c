@@ -1,8 +1,12 @@
-#include "hash.h"
-#define UTIL_STD
+#define UTIL_ALL
 #include "utils.h"
 
+#include "hash.h"
+
 static HashMap *map = {0};
+
+typedef unsigned long int u4;
+typedef unsigned char u1;
 
 #define LOAD_BALANCE 1
 
@@ -70,7 +74,6 @@ u4 hash( register u1 *k, u4 length, u4 initval)
    return c;
 }
 
-// Calc next prime greater than min
 int next_size(int min) {
     return min * 2;
 }
@@ -90,7 +93,7 @@ HashMap *hash_create(int size) {
 }
 
 // state = 0: insert, key == NULL    state = 1: search      state = 2: delete
-int quadratic_probe(HashMap *map, unsigned long start, int state, const char *key) {
+static int quadratic_probe(HashMap *map, unsigned long start, int state, const char *key) {
     unsigned long index = start;
     int probe_count = 0;
     int inc = 0;
@@ -145,7 +148,7 @@ int quadratic_probe(HashMap *map, unsigned long start, int state, const char *ke
 }
 
 // Resizes hashmap
-void hash_resize() {
+static void hash_resize() {
     HashMap *new = hash_create(next_size(map->size));
 
     for (int i = 0; i < map->size; i++) {
@@ -256,7 +259,7 @@ void hash_destroy() {
     if (map == NULL)
         return;
 
-    DEBUG("(Final info) size: %d, length: %d", map->size, map->length);
+    //DEBUG("(Final info) size: %d, length: %d", map->size, map->length);
 
     for (int i = 0; i < map->size; i++) {
         if (map->table[i].status == 1) {

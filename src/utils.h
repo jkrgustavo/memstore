@@ -1,17 +1,22 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-/* To include the standard headers, define UTIL_STD before including the header like so:
- * #define UTIL_STD
- * #include "utils.h"
+/* available:
+ * UTIL_STD
+ * UTIL_TYPES
+ * UTIL_RAYLIB
+ * UTIL_ALL
  */
 
-#ifdef UTIL_STD
-#  include <stdio.h>
-#  include <stdlib.h>
-#  include <memory.h>
-#  include <string.h>
-#  include <time.h>
+#if defined(UTIL_STD) || defined(UTIL_ALL) 
+#   include <stdio.h>
+#   include <stdlib.h>
+#   include <memory.h>
+#   include <string.h>
+#   include <time.h>
+#   include <stdint.h>
+#   include <math.h>
+#   include <assert.h>
 #endif
 
 /* Neat logging macros, requires a format string (except for LOG) */
@@ -26,8 +31,40 @@
 #define ERROR_FORMAT(fmt, ...) printf("[ERROR]   " fmt "\n", __VA_ARGS__)
 #define ERROR(...) ERROR_FORMAT(__VA_ARGS__)
 
-typedef unsigned long int u4;
-typedef unsigned char u1;
+#if defined(UTIL_TYPES) || defined(UTIL_ALL)
+#   include <stdint.h>
+
+    typedef uint8_t  u8;
+    typedef uint16_t u16;
+    typedef uint32_t u32;
+    typedef uint64_t u64;
+
+    typedef int8_t  s8;
+    typedef int16_t s16;
+    typedef int32_t s32;
+    typedef int64_t s64;
+
+    typedef float  f32;
+    typedef double f64;
+#endif
+
+#if defined(UTIL_RAYLIB) || defined(UTIL_ALL)
+#   include "../res/raylib/raylib.h"
+    typedef Vector2 vec2;
+    typedef Vector3 vec3;
+#endif
+
+#if defined(UTIL_ALL)
+#   undef UTIL_ALL
+#endif
+
+#if defined(UTIL_STD)
+#   undef UTIL_STD
+#endif
+
+#if defined(UTIL_TYPES)
+#   undef UTIL_TYPES
+#endif
 
 char **process_words(char *buffer);
 

@@ -5,7 +5,7 @@
 int toLower(char *);
 int searchArray(char words[][6], int count, char[]);
 
-int main() {
+int _main() {
     FILE *fptr;             // file pointer
     char words[5196][6];
     char searchWord[6];
