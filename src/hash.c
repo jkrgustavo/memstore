@@ -1,7 +1,7 @@
 #define UTIL_ALL
 #include "utils.h"
-
 #include "hash.h"
+#include "slab.h"
 
 static HashMap *map = {0};
 
@@ -80,13 +80,14 @@ int next_size(int min) {
 
 HashMap *hash_create(int size) {
     if (size < 0) {
-        fprintf(stderr, "Invalid hashmap size: %s", __func__);
+        fprintf(stderr, "Invalid hashmap size: %s\n", __func__);
         return NULL;
     }
 
+
     HashMap *new = malloc(sizeof(HashMap)); 
-    new->table = malloc(sizeof(HashEntry) * size);
-    memset(new->table, 0, sizeof(HashEntry) * size);
+    new->table = malloc(sizeof(item *) * size);
+    memset(new->table, 0, sizeof(item *) * size);
     new->size = size;
     new->length = 0;
     return new;
@@ -102,18 +103,18 @@ static int quadratic_probe(HashMap *map, unsigned long start, int state, const c
     float c2 = 0.7;
 
     if (state == 0) {
-        while (map->table[index].status == 1 && probe_count <= map->size * 2) {
+        while (map->table[index] != 0 && probe_count <= map->size * 2) {
             index = (int)(index + c1 * inc + c2 * inc * inc) & (map->size - 1);
             inc++;
             probe_count++;
         }
         if (probe_count >= map->size * 2) {
-            fprintf(stderr, "Max insert reached: %s", __func__);
+            fprintf(stderr, "Max insert reached: %s\n", __func__);
             return -1;
         }
     } else if (state == 1 && key != NULL) {
-        while (map->table[index].status != 0 && probe_count <= map->size * 2) {
-            if (map->table[index].status == 1 && strcmp(map->table[index].key, key) == 0) { break; }
+        while (map->table[index] != NULL && probe_count <= map->size * 2) {
+            if (map->table[index] != NULL && strcmp(ITEM_key(map->table[index]), key) == 0) { break; }
 
             index = (int)(index + c1 * inc + c2 * inc * inc) & (map->size - 1);
             inc++;
@@ -121,13 +122,13 @@ static int quadratic_probe(HashMap *map, unsigned long start, int state, const c
         }
 
         if (probe_count >= map->size * 2) {
-            fprintf(stderr, "Max search reached: %s", __func__);
+            fprintf(stderr, "Max search reached: %s\n", __func__);
             return -1;
         }
         
     } else if (state == 2 && key != NULL) {
-        while (map->table[index].status != 0 && probe_count <= map->size * 2) {
-            if (map->table[index].status == 1 && strcmp(map->table[index].key, key) == 0) { break; }
+        while (map->table[index] != 0 && probe_count <= map->size * 2) {
+            if (map->table[index] != 0 && strcmp(ITEM_key(map->table[index]), key) == 0) { break; }
 
             index = (int)(index + c1 * inc + c2 * inc * inc) & (map->size - 1);
             inc++;
@@ -135,7 +136,7 @@ static int quadratic_probe(HashMap *map, unsigned long start, int state, const c
         }
 
         if (probe_count >= map->size * 2) {
-            fprintf(stderr, "Max delete reached: %s", __func__);
+            fprintf(stderr, "Max delete reached: %s\n", __func__);
             return -1;
         }
     } else {
@@ -152,119 +153,101 @@ static void hash_resize() {
     HashMap *new = hash_create(next_size(map->size));
 
     for (int i = 0; i < map->size; i++) {
-        if (map->table[i].status == 1) {
-            unsigned long index = hash((unsigned char*)map->table[i].key, strnlen(map->table[i].key, 20), 0) & new->size-1;
+        item *it = map->table[i];
+        if (it != NULL) {
+            unsigned long index = hash((unsigned char*)ITEM_key(map->table[i]), map->table[i]->keylen, 0) & new->size-1;
             index = quadratic_probe(new, index, 0, NULL);
 
-            new->table[index] = (HashEntry) {
-                .status = 1,
-                .val = map->table[i].val,
-                .key = map->table[i].key 
-            };
+            new->table[index] = map->table[i];
             new->length++;
         } else {
-            fprintf(stderr, "Non-full resize: %s", __func__);
+            fprintf(stderr, "Non-full resize: %s\n", __func__);
         }
     }
 
-    free(map->table);
+    //free(map->table);
     free(map);
     map = new;
 }
 
-void hash_insert(const char *key, const char *val) {
+void hash_insert(const char *key, void *data) {
     if (map == NULL) {
+        slabs_init();
         map = hash_create(128);
     } else if (map->size * LOAD_BALANCE <= map->length) {
         hash_resize();
     }
 
-    unsigned long index = hash((unsigned char*)key, strnlen(key, 20), 0) & map->size-1;
-    index = quadratic_probe(map, index, 0, NULL);
-
-    if (map->table[index].status == 1 || index == -1) {
-        fprintf(stderr, "Attempt to insert into invalid slot, key: %s", key);
-        return;
+    u32 key_length = strnlen(key, 100);
+    if (key_length >= 100) {
+        fprintf(stderr, "Error finding key length. key: %s, %s\n", key, __func__);
     }
 
-    char *heap_key = malloc(strnlen(key, 20));
-    char *heap_val = malloc(strnlen(val, 20));
-    strcpy(heap_key, key);
-    strcpy(heap_val, val);
-    
-    map->table[index] = (HashEntry) {
-        .status = 1,
-        .val = heap_val,
-        .key = heap_key
-    };
-    map->length++;
 
+    item *it = data;
+    if (it->item_flags != 0)
+        fprintf(stderr, "Error allocating item: %s\n", __func__);
+
+    it->keylen = key_length;
+
+    it->item_flags |= ITEM_HASHED;
+    memcpy(ITEM_key(it), key, it->keylen);
+
+    unsigned long index = hash((unsigned char*)ITEM_key(it), it->keylen, 0) & map->size-1;
+    index = quadratic_probe(map, index, 0, NULL);
+
+    if ((map->table[index] != NULL) || index == -1) {
+        fprintf(stderr, "Attempt to insert into invalid slot, key: %s\n", key);
+        return;
+    }
+    
+    map->table[index] = it;
+    map->length++;
 }
 
-int hash_retrieve(const char *key, char *buffer) {
-    long index = hash((unsigned char*)key, strnlen(key, 20), 0) & map->size-1;
+void *hash_retrieve(const char *key) {
+    long index = hash((unsigned char*)key, strnlen(key, 100), 0) & map->size-1;
 
     index = quadratic_probe(map, index, 1, key);
 
-    if (index == -1) {
-        fprintf(stderr, "Attempt to retrieve from invalid slot, key: %s", key);
-        return -1;
+
+
+    if (index == -1 || map->table[index] == NULL) {
+        fprintf(stderr, "Attempt to retrieve from invalid slot: %s\n", __func__);
+        return NULL;
     }
 
-    if (map->table[index].status != 1) {
-        buffer = NULL;
-        return -1;
-    }
-
-    if (buffer != NULL)
-        strcpy(buffer, map->table[index].val);
-
-    return 0;
+    item *it = map->table[index];
+    return it;
 }
 
-int hash_delete(const char *key, char *buffer) {
+void hash_delete(const char *key) {
     if (map->length <= 0) {
         fprintf(stderr, "Cannot delete from empty table! key: %s", key);
-        return -1;
     }
 
     long index = hash((unsigned char *)key, strnlen(key, 20), 0) & map->size-1;
-
     index = quadratic_probe(map, index, 2, key);
+    item *it = map->table[index];
 
-    if (index == -1) {
-        fprintf(stderr, "Attempt to delete from invalid slot, key: %s", key);
-        return -1;
+    if (index == -1 || it->item_flags & ITEM_HASHED) {
+        fprintf(stderr, "Attempt to delete from invalid slot, key: %s\n", key);
     }
 
-    if (map->table[index].status != 1) {
-        buffer = NULL;
-        return -1;
-    }
-
-    if (buffer != NULL)
-        strcpy(buffer, map->table[index].val);
-
-    free((char*)map->table[index].key);
-    free((char*)map->table[index].val);
-    map->table[index].key = NULL;
-    map->table[index].val = NULL;
-    map->table[index].status = -1;
+    slabs_free(it);
+    map->table[index] = NULL;
     map->length--;
-
-    return 0;
 } 
 
 void hash_destroy() {
     if (map == NULL)
         return;
-
-    //DEBUG("(Final info) size: %d, length: %d", map->size, map->length);
+    DEBUG("(Final info) size: %d, length: %d", map->size, map->length);
 
     for (int i = 0; i < map->size; i++) {
-        if (map->table[i].status == 1) {
-            free((void*)map->table[i].key);
-            free((void*)map->table[i].val);
+        item *it = map->table[i];
+        if (it != NULL) {
+            slabs_free(it);
         }
     }
     free(map->table);
@@ -273,11 +256,16 @@ void hash_destroy() {
 
 int hash_status(int index) {
     if (index < 0 || index >= map->size) {
-        fprintf(stderr, "Invalid index: %s", __func__);
+        fprintf(stderr, "Invalid index: %s\n", __func__);
         return -1;
     }
 
-    return map->table[index].status;
+    item *it = map->table[index];
+
+    if (it == NULL)
+        return 0;
+
+    return 1;
 }
 
 int hash_size() {

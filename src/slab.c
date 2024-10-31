@@ -5,15 +5,12 @@
 #define POWER_LARGEST MAX_NUMBER_OF_SLAB_CLASSES - POWER_SMALLEST
 #define GROWTH_FACTOR 1.25
 
-#define SLAB_PAGE_SIZE 1000 //1024 * 1024 /* 1MB page size */
+#define SLAB_PAGE_SIZE 1000 * 100 //1024 * 1024 /* 1MB page size */
 
 #define CHUNK_SIZE 48
 #define CHUNK_ALIGN 8
 
-
-
 static slabclass_t slabclass[MAX_NUMBER_OF_SLAB_CLASSES];
-
 
 /* Finds the right slabclass for a given size
  *
@@ -36,6 +33,10 @@ u32 slab_size(const u32 id) {
 }
 
 void slabs_init() {
+    if (slabclass[1].size != 0) {     /* slabs_init() has already been called */
+        //DEBUG("%s", "slabclass init skipped");
+        return;
+    }
     u32 i = POWER_SMALLEST - 1;
     u32 size = sizeof(item) + CHUNK_SIZE;
 
@@ -43,7 +44,7 @@ void slabs_init() {
 
     while (i++ <= POWER_LARGEST) {
         /* align chunk sizes */
-        if (size % CHUNK_ALIGN) size += CHUNK_ALIGN - (size % CHUNK_ALIGN);
+        if ((size + sizeof(item)) % CHUNK_ALIGN) size += CHUNK_ALIGN - ((size + sizeof(item)) % CHUNK_ALIGN);
 
         slabclass[i].size = size;
         slabclass[i].perslab = SLAB_PAGE_SIZE / slabclass[i].size;
@@ -54,16 +55,17 @@ void slabs_init() {
 
 static void do_slabs_free(void *ptr, u32 id) {
     slabclass_t *p;
-    item *it;
+    item *it = ptr;
     assert(id <= MAX_NUMBER_OF_SLAB_CLASSES && id >= POWER_SMALLEST);
     memset(ptr, 0, sizeof(item) + it->nbytes);
-    
+
     p = &slabclass[id];
     it = (item *)ptr;
 
     it->next = p->slots;
     it->prev = 0;
     if (it->next) it->next->prev = it;
+    it->item_flags = ITEM_IN_SLAB;
     p->slots = it;
     p->slot_nfree++;
     return;
@@ -110,6 +112,7 @@ static int item_init(void *ptr, const u32 size, const u32 id) {
     it->next = it->prev = 0;
     it->nbytes = size;
     it->slabsclass_id = id;
+    it->item_flags = 0;
     return 1;
 }
 
@@ -139,8 +142,6 @@ void *slabs_alloc(const u32 size) {
 
     ret = (void*)it;
 
-
-    DEBUG("==ALLOC== size: %d, class: %d, item size: %d, address: %p", size, id, p->size, ret);
     return ret;
 }
 
@@ -155,4 +156,30 @@ slabclass_t *check_slabs(const u32 size) {
 
 slabclass_t *get_slabs() {
     return slabclass;
+}
+
+void data_dump(void *item_in) {
+    item *it = item_in;
+    char *ptr = (char *)it->data;
+    u32 unused_count = 0;
+    INFO("%s", "------------------------------------------");
+    ITEM_dump(it);
+    for (int i = 0; i < slab_size(it->slabsclass_id); i++) {
+        if (*ptr != '\0') {
+            if ((u8)*ptr == 10 || (u8)*ptr == 11) {
+                INFO("char: \\n      int: %d     adr: %p", (s32)*ptr, ptr);
+            } else {
+                INFO("char: %c      int: %d     adr: %p", *ptr, (s32)*ptr, ptr);
+            }
+
+             if (*(ptr + 1) == '\0') {
+                 INFO("%s", "");
+             }
+        }
+        if (i >= it->keylen + it->nbytes)
+            unused_count++;
+        ptr++;
+    }
+    INFO("unused bytes: %d", unused_count);
+    INFO("%s", "------------------------------------------");
 }

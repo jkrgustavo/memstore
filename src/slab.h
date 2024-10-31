@@ -1,3 +1,6 @@
+#ifndef SLAB_H
+#define SLAB_H
+
 #define UTIL_ALL
 #include "utils.h"
 
@@ -10,7 +13,9 @@ typedef struct _stritem {
     u16 item_flags;     /* info for each item */
     u8 slabsclass_id;   /* which slabclass this item belongs to */
 
-    u64 data[];
+    u32 keylen;         /* key size in bytes, includes null termination */
+
+    u64 data[];         /* actual data contained within the item */
 } item;
 
 typedef struct {
@@ -26,7 +31,15 @@ typedef struct {
     u32 list_size;      /* previous list size */
 } slabclass_t;
 
-#define ITEM_data(it, type) ((type *)(&it->data))
+#define ITEM_data(it) ((char *)&((it)->data))
+#define ITEM_key(it) ((char *)&((it)->data) + (it)->nbytes)
+#define ITEM_ntotal(it) ((it)->keylen + (it)->nbytes + sizeof(item))
+
+#define SLAB_dump(p) INFO("--SLAB-- size: %d, perslab: %d, slot_nfree: %d, nslabs: %d, list_size: %d", \
+            (p)->size, (p)->perslab, (p)->slot_nfree, (p)->nslabs, (p)->list_size)
+
+#define ITEM_dump(it) INFO("--ITEM--  nbytes: %d, item_flags: %x, slabclass_id: %d, keylen: %d, key: %s", \
+                        it->nbytes, it->item_flags, it->slabsclass_id, it->keylen, ITEM_key(it))
 
 #define ITEM_IN_SLAB 2
 #define ITEM_HASHED 4
@@ -54,3 +67,7 @@ void slabs_free(void *ptr);
 slabclass_t *check_slabs(const u32 size);
 
 slabclass_t *get_slabs();
+
+void data_dump(void *item_in);
+
+#endif /* SLAB_H */
