@@ -1,6 +1,6 @@
 CC = clang
 BIN = bin
-NAME = memcache
+NAME = memstore
 
 CFLAGS = 
 
